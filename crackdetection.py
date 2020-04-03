@@ -42,7 +42,7 @@ def extract_bv_ori(image):
         shape = "unidentified"
         peri = cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, 0.04 * peri, False)
-        if len(approx) > 4 and cv2.contourArea(cnt) <= 3000: # and cv2.contourArea(cnt) >= 100:
+        if len(approx) > 4 and cv2.contourArea(cnt) <= 3000: #and cv2.contourArea(cnt) >= 100:
             shape = "circle"
         else:
             shape = "veins"
@@ -51,15 +51,9 @@ def extract_bv_ori(image):
 
     finimage = cv2.bitwise_and(fundus_eroded, fundus_eroded, mask=xmask)
     blood_vessels = cv2.bitwise_not(finimage)
-
-    # fig, axs =plt.subplots(1,2,figsize=(18,5))
-    # axs[0].imshow(fundus_eroded,cmap='gray')
-    # axs[1].imshow(blood_vessels, cmap='gray')
-    # plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
-    # plt.show()
     return blood_vessels
 
-def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=True,use_cut200=True,check_shape=True):
+def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=True,use_cut200=True,check_shape=True,show=True):
     b, g, r = cv2.split(image)
     if use_bilateralFilter==True:
         image_bf = cv2.bilateralFilter(g, 5, 40, 40)  # bif1 = cv2.adaptiveBilateralFilter(image, 5, 40, 40)
@@ -77,8 +71,8 @@ def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=Tru
     R2 = cv2.morphologyEx(r2, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)), iterations=1)
     f2 = cv2.subtract(R2, img_bf_clahe)
 
-    r3 = cv2.morphologyEx(R2, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)), iterations=1)
-    R3 = cv2.morphologyEx(r3, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)), iterations=1)
+    r3 = cv2.morphologyEx(R2, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)), iterations=2)
+    R3 = cv2.morphologyEx(r3, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)), iterations=2)
     f3 = cv2.subtract(R3, img_bf_clahe)
 
     # r4 = cv2.morphologyEx(R3, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (47, 47)), iterations=1)
@@ -105,7 +99,8 @@ def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=Tru
         im_sub_area200 = cv2.bitwise_and(f5, f5, mask=mask)
         ret, im_sub_area200_binary = cv2.threshold(im_sub_area200, 15, 255, cv2.THRESH_BINARY_INV)
     else:
-        im_sub_area200_binary=f6
+        im_sub_area200=f5
+        im_sub_area200_binary=cv2.bitwise_not(f6)
 
     if use_erode3==True:
         im_sub_area200_binary_erode3 = cv2.erode(im_sub_area200_binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
@@ -115,8 +110,9 @@ def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=Tru
 
     """ removing small blobs"""
     im_sub_area200_binary_erode3_not = cv2.bitwise_not(im_sub_area200_binary_erode3 ) #crack 1, background 0
-    result=0
-    if check_shape==True:
+    if check_shape == False:
+        result = im_sub_area200_binary_erode3
+    else:
         xmask1 = np.ones(image.shape[:2], dtype="uint8") * 255
         xcontours, xhierarchy = cv2.findContours(im_sub_area200_binary_erode3_not, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for contor in xcontours:
@@ -125,55 +121,38 @@ def crack_detection(image,use_bilateralFilter=True,use_gauss=True,use_erode3=Tru
 
         finimage = cv2.bitwise_and(im_sub_area200_binary_erode3_not, im_sub_area200_binary_erode3_not, mask=xmask1)
         blood_vessels = cv2.bitwise_not(finimage)
-
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (12, 12))  # (12:width direction, 9 height direction)
-        opening = cv2.morphologyEx(blood_vessels, cv2.MORPH_OPEN, kernel)
+        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (12, 12))  # (12:width direction, 9 height direction)
+        # opening = cv2.morphologyEx(blood_vessels, cv2.MORPH_OPEN, kernel)
         """smoothing cracks"""
 
         result=blood_vessels
-    else:
-        result = im_sub_area200_binary_erode3
 
-    # fig, axs = plt.subplots(2, 2, figsize=(18, 10))
-    # axs[0, 0].imshow(f5, cmap='gray')
-    # axs[0, 1].imshow(im_sub_area200, cmap='gray')
-    # axs[1, 0].imshow(im_sub_area200_binary_erode3_not, cmap='gray')
-    # axs[1, 1].imshow(result, cmap='gray')
-    # plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
-    # plt.show()
+    showcrack=cv2.bitwise_and(g,g,mask = result)
+    if show == True:
+        fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+        axs[0, 0].imshow(f5, cmap='gray')
+        axs[0, 1].imshow(result, cmap='gray')
+        axs[1, 0].imshow(im_sub_area200_binary_erode3_not, cmap='gray')
+        axs[1, 1].imshow(showcrack, cmap='gray')
+        plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
+        plt.show()
 
     return  result
 
+def read3d_raw(filepath,height,width):
+    count = int(os.stat(filepath).st_size / 2)
+    with open(filepath, 'rb') as fp:
+        binaryC3 = array.array("h")
+        binaryC3.fromfile(fp, count)
+    image = np.reshape(binaryC3, (height, width)) #512, 1024
+    image = image.astype('float32')
+    image *= 255.0 / image.max()
+    g_uint8= image.astype(np.uint8)
+    return g_uint8
+
 if __name__ == "__main__":
 
-    is3D_raw=False
-    if is3D_raw:
-        filePathC = r"D:\data\E00000353.raw"
-        count = int(os.stat(filePathC).st_size / 2)
-        with open(filePathC, 'rb') as fp:
-            binaryC3 = array.array("h")
-            binaryC3.fromfile(fp, count)
-        image = np.reshape(binaryC3, (512,1024))
-        image = image.astype('float32')
-        image *= 255.0/image.max()
-        g= image.astype(np.uint8)
-
-    filepath = r"D:\data\inputs\E3D00000076.jpg"
-    input_img = cv2.imread(filepath)
-    results_ori = extract_bv_ori(input_img)
-    results_bf = crack_detection(input_img, use_bilateralFilter=True, use_gauss=True, use_erode3=False,
-                                 use_cut200=True,
-                                 check_shape=False)
-
-    fig, axs = plt.subplots(1, 2, figsize=(18,9))
-    axs[0].imshow(results_ori, cmap='gray')
-    axs[1].imshow(results_bf, cmap='gray')
-    # axs[2].imshow(results_bf, cmap='gray')
-    plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
-    plt.show()
-
-
-    test_img_folder=False
+    test_img_folder=True
     if test_img_folder:
         # pathFolder = r"D:\\data\\CHASEDB1\\train\\"
         pathFolder = "D:\\data\\inputs\\"
@@ -183,18 +162,44 @@ if __name__ == "__main__":
             os.mkdir(destinationFolder)
         for file_name in filesArray:
             file_name_no_extension = os.path.splitext(file_name)[0]
-            input_img = cv2.imread(pathFolder + '/' + file_name)
-            results_ori = extract_bv_ori(input_img)
-            results_bf = crack_detection(input_img, use_bilateralFilter=True, use_gauss=True, use_erode3=False,
-                                         use_cut200=True,
-                                         check_shape=False)
+            img_3d = cv2.imread(pathFolder + '/' + file_name)
+            results_bf = crack_detection(img_3d, use_bilateralFilter=True, use_gauss=True, use_erode3=False,
+                                         use_cut200=False,
+                                         check_shape=True,
+                                         show=True)
+            compare_ori = False
+            if compare_ori:
+                results_ori = extract_bv_ori(img_3d)
+
+                fig, axs = plt.subplots(1, 2, figsize=(18, 9))
+                axs[0].imshow(results_ori, cmap='gray')
+                axs[1].imshow(results_bf, cmap='gray')
+                plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
+                plt.show()
+
             save_result = False
             if save_result == True:
                 cv2.imwrite(destinationFolder + file_name_no_extension + "_bf.png", results_bf)
+    else:
+        # filepath = r"D:\data\E00000353.raw"
+        filepath = r"D:\data\inputs\E3D00000076.jpg"
+        is3D_raw = False
+        if is3D_raw:
+            img_3d = read3d_raw(filepath, height=512, width=1024)
+        else:
+            img_3d = cv2.imread(filepath)
 
-            fig, axs = plt.subplots(1, 2, figsize=(17, 9))
+        results_bf = crack_detection(img_3d, use_bilateralFilter=True, use_gauss=True, use_erode3=False,
+                                     use_cut200=False,
+                                     check_shape=True,
+                                     show=True)
+
+        compare_ori = False
+        if compare_ori:
+            results_ori = extract_bv_ori(img_3d)
+            fig, axs = plt.subplots(1, 2, figsize=(18, 9))
             axs[0].imshow(results_ori, cmap='gray')
             axs[1].imshow(results_bf, cmap='gray')
-            # axs[2].imshow(results_bf, cmap='gray')
             plt.tight_layout(pad=0.2, h_pad=0.2, w_pad=0.1, rect=None)
             plt.show()
+
